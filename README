@@ -1,142 +1,16 @@
 
-cpulock [ options ] [ cpus ] command [ args ... ]
+cpulock : a simple cpu mutual exclusion utility
 
-Exclusively occupy specific CPUs (cores) to the command, among all
-processes that use this mechanism.
+see docs/usage.txt for how to use
 
-This is a simple "mutual exclusion" utility for running many processes
-so that each is run exclusively on a set of CPU cores.  Its syntax is
-similar to taskset utility on Linux. For example,
+== INSTALL ==
 
-    cpulock -c 0,3,7 ./your_program
+cd src
+make 
 
-will acquire three CPUs 0, 3, and 7, waiting for them to become free
-if necessary, and then run command ./your_program.  
-
-to run many multithreaded programs
-concurrently in such a way that each process is exclusively given a
-set of CPUs.  For example,
+will compile an executable 'cpulock.'  Run it or copy it to whereever you like.
 
 
-BASICS:
-
-    cpulock -c 0,3,7 ./your_program
-
-will wait until it can exclusively grabs these CPUs, waiting for other
-programs occupying one of them using this mechanism to finish if
-necessary, and then run './your_program'.  This is basically a mutual
-exclusion among cpulock processes.
-
-MOTIVATION: 
-
-This program is intended to facilitate parameter sweep jobs, each task
-of which runs a multithreaded parallel program with different degrees
-of parallelism.  A typical example is a benchmarking or a scalability
-measurement of a parallel program, in which you need to run the same
-program with different inputs and parameters, each with various
-numbers of threads (or CPUs).  You would like to run many instances
-of small jobs simultaneously while you need to run large jobs in
-serial.  GNU make can only control the number of processes
-simultaneously running.  gxp make -j can count the number of CPUs
-used by each process, but still cannot guarantee each thread of these
-simultaneously running processes will run on a cpu exclusively.  In
-principle, we could hope a reasonable operating system will run each
-thread on a distinct cpu (assuming we have a number of threads
-smaller than the total number of CPUs), but in my experiences it
-often does not happen especially when you have many CPUs.  cpulock
-utility allows you to launch a number of jobs larger than the cpu
-count, yet to coordinate them to run in serial as necessary.
-
-OPTIONS:
-
-  --cpu-list CPU_GROUP_LIST, -c CPU_GROUP_LIST:
-     specify a list of CPU groups that may be allocated for the process.
-     see below for the syntax of CPU_GROUP_LIST.
-
-  --required N, -n N:
-
-     specify the number of CPU groups that must be alloated in order for
-     this process to begin, among those specified with --cpu-list.
-     by default, it is the number of CPU groups specified with --cpu-list,
-     so it starts after all CPU groups becomes available.
-
-  --resource-file FILE, -f FILE:
-
-     specify the file to track which CPU is available and which CPU
-     is currently grabbed by which process.  by default, it uses
-     /tmp/cpulock_resources, shared by all users.  automatically
-     created when it does not exist.
-
-  --show-resource, -s:
-
-     show the status of all resources, by showing the contents of the
-     resource file (default one or the one specified by --resource-file).
-     among others, it shows whether each CPU is currently free or
-     being held by a process. it also shows the process id of the
-     holding process and the time at whcih the last state transition
-     happens.
-
-  --var VAR, -x VAR:
-
-     by default, it sets CPUS_LOCKED environment variable of the 
-     chlild process. for example, when CPU 0, 3, and 7 are allocated,
-     the child process will find the environment variable CPUS_LOCKED
-     to be "0,3,7".  this option allows you to change the environment
-     variable to be set to VAR.  the spawned process can consult the
-     variable to know which CPUs are allocated to it.
-
-  --no-bind, -B:
-
-     by default, in addition to setting CPUS_LOCKED environment
-     variable (or the one specified with --var), it sets the affinity
-     of the child process by means of sched_setaffinity.  for example,
-     when CPUS_LOCKED=0,3,7, athe OS is old to run all threads in the
-     spawned process on 0, 3, and 7.  this option suppresses this
-     action.  it then becomes the responsibility of the spawned
-     process to migrate all threads in the process to the allocated
-     CPUs.  this option may be useful for multithreaded applications
-     that need to bind each individual _thread_ (not the entire
-     process) to a specific CPU, so they need to call
-     sched_setaffinity by themselves anyways (note that by default,
-     cpulock won't guarantee no threads compete within each process).
-
-  --release-orphan-resource, -r:
-
-     cpulock is written reasonably carefully so that it terminates
-     'cleanly'; killing it with Ctrl-C (SIGINT) or SIGINT will not
-     leave the CPUs being locked permanently.  there are still
-     possibilities that this happens (e.g., the cpulock gets killed
-     by SIGKILL or it gets killed in an unfortunate time window, which
-     I hope is pretty short).  in such cases, cpulock -s will display
-     these CPUs as orhpan.  it knows such CPUs by looking at the
-     process id of the resource holder, which is recorded in the
-     resource file, and checking if the process is still alive.  if
-     you witness such broken file, you can fix it by invoking cpulock
-     with option -r.  it fixes the record of such entries to free
-     state.
-
-  --reset-resource, -R:
-
-     completely reset the state of the resource file. all CPUs are
-     marked as free.  cpulock -R essentially recreates the resource
-     file.
-
-  --cpus N, -C N:
-
-     when cpulock creates the resource file for the first time, it
-     automatically infers the number of CPUs by means of sycconf
-     system call.  if you ever want to specify the number of CPUs
-     managed by cpulock, specify this parameter with -R.
-
-  --bind-self CPU_GROUP_LIST, -b CPU_GROUP_LIST:
-
-     specify the CPUs on which cpulock itself will run, so that it
-     won't disturbe parallel processes running on other CPUs.
-     cpulock does not consume much CPUs, so it should not be an issue
-     even without this option. you may nevertheless want to make sure
-     cpulock never disturbes other processes, by ensuring all cpulock
-     processes run on a particular CPU, for example.
-
-TODO: 
-- suppport 'mask' just as taskset does
+== TODO ==
+- support 'mask' just as taskset does
 - suppport stride just as taskset does

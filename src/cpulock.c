@@ -417,15 +417,17 @@ int find_process(pid_t pid) {
 }
 
 static void release_orphans_in_respool(respool_t res) {
+  double tolerance = 3.0;
   double ct = cur_time();
   int i;
   for (i = 0; i < res->n_resources; i++) {
     pid_t p = res->states[i].pid;
-    if (p && find_process(p) == 0) {
+    double since = res->states[i].since;
+    if (p && ct - since > tolerance && find_process(p) == 0) {
       fprintf(stderr, 
-	      "%s: resource [%d] held by non-existing process %d since %.3f.\n"
+	      "%s: resource [%d] held by non-existing process %d since %.3f (for %.3f sec).\n"
 	      "Release it\n",
-	      gv.args->progname, i, p, res->states[i].since);
+	      gv.args->progname, i, p, since, ct - since);
       res->states[i].pid = 0;
       res->states[i].since = ct;
     }
@@ -659,6 +661,7 @@ static reply_t acquire_resources(request_t req, respool_t res) {
     fprintf(stderr, "%s: pthread_mutex_lock\n", gv.args->progname);
   }
   pthread_mutex_lock(&res->mutex);
+  release_orphans_in_respool(res);
   while (try_acquire_resources(req, res, rep) == 0) {
     pthread_cond_wait(&res->cond, &res->mutex);
   }
@@ -896,8 +899,8 @@ int test_main(int argc, char ** argv) {
 
 static void usage() {
   fprintf(stderr, 
-	  "usage: %s [options] [ cpu-list ] cmd [args...]\n",
-	  gv.args->progname);
+#include "usage.h"
+);
 }
 
 static cmdline_args_t parse_cmdline(int argc, char ** argv) {

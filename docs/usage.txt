@@ -1,0 +1,184 @@
+usage:
+
+  cpulock [ OPTIONS ] [ CPU_GROUP_LIST ] COMMAND [ ARGS ... ]
+
+Exclusively occupy specific CPUs (cores) to the command among all
+processes that use this mechanism.
+
+Cpulock is a simple "mutual exclusion" utility for running many
+processes in such a way that each is run exclusively on a set of CPU
+cores.  Its syntax is similar to the taskset utility on Linux. For
+example,
+
+    cpulock -c 0,3,7 ./your_program
+
+will acquire three CPUs 0, 3, and 7, waiting for them to become free
+if necessary, and then run command ./your_program.  This is basically
+a mutual exclusion among cpulock processes.
+
+DESCRIPTION:
+
+This program is intended to facilitate parameter sweep jobs, each task
+of which runs a multithreaded parallel program with different degrees
+of parallelism.  A typical example is a benchmarking or a scalability
+measurement of a parallel program, in which you need to run the same
+program with different inputs and parameters, each with various
+numbers of threads (or CPUs).  You would like to run many instances
+of small jobs simultaneously while you need to run large jobs in
+serial.  GNU make can only control the number of processes
+simultaneously running.  gxp make -j can count the number of CPUs
+used by each process, but still cannot guarantee each thread of these
+simultaneously running processes will run on a cpu exclusively.  In
+principle, we could hope a reasonable operating system will run each
+thread on a distinct cpu (assuming we have a number of threads
+smaller than the total number of CPUs), but in my experiences it
+often does not happen especially when you have many CPUs.  cpulock
+utility allows you to launch a number of jobs larger than the cpu
+count, yet to coordinate them to run in serial as necessary.
+
+OPTIONS:
+
+  --cpu-list CPU_GROUP_LIST, -c CPU_GROUP_LIST:
+
+     specify a list of CPU groups that may be allocated for the process.
+     See below for the syntax of CPU_GROUP_LIST.
+
+  --required N, -n N:
+
+     specify the number of CPU groups that must be allocated in order for
+     this process to begin, among those specified with --cpu-list.
+     By default, it is the number of CPU groups specified with --cpu-list,
+     so it starts after all CPU groups becomes available.
+
+  --resource-file FILE, -f FILE:
+
+     specify the file to track which CPU is available and which CPU
+     is currently grabbed by which process.  By default, it uses
+     /tmp/cpulock_resources, shared by all users.  automatically
+     created when it does not exist.
+
+  --show-resource, -s:
+
+     show the status of all resources, by showing the contents of the
+     resource file (default one or the one specified by --resource-file).
+     Among others, it shows whether each CPU is currently free or
+     being held by a process. it also shows the process id of the
+     holding process and the time at which the last state transition
+     happens.
+
+  --var VAR, -x VAR:
+
+     By default, cpulock sets CPUS_LOCKED environment variable of the
+     child process. for example, when CPU 0, 3, and 7 are allocated,
+     the child process will find the environment variable CPUS_LOCKED
+     to be "0,3,7".  This option allows you to change the environment
+     variable to be set to VAR.  the spawned process can consult the
+     variable to know which CPUs are allocated to it.
+
+  --no-bind, -B:
+
+     By default, in addition to setting CPUS_LOCKED environment
+     variable (or the one specified with --var), it sets the affinity
+     of the child process by means of sched_setaffinity.  For example,
+     when CPUS_LOCKED=0,3,7, the OS is told to run all threads in the
+     spawned process on 0, 3, and 7.  This option suppresses this
+     action.  It then becomes the responsibility of the spawned
+     process to migrate all threads in the process to the allocated
+     CPUs.  This option may be useful for multithreaded applications
+     that need to bind each individual _thread_ (not the entire
+     process) to a specific CPU, so they need to call
+     sched_setaffinity by themselves anyways (note that by default,
+     cpulock won't guarantee no threads compete within each process).
+
+  --release-orphan-resource, -r:
+
+     Cpulock is written reasonably carefully so that it terminates
+     'cleanly'; killing it with Ctrl-C (SIGINT) or SIGINT will not
+     leave the CPUs being locked permanently.  There are still
+     possibilities that this happens (e.g., the cpulock gets killed
+     by SIGKILL or it gets killed in an unfortunate time window, which
+     I hope is pretty short).  In such cases, cpulock -s will display
+     these CPUs as orphan.  It knows such CPUs by looking at the
+     process id of the resource holder, which is recorded in the
+     resource file, and checking if the process is still alive.  If
+     you witness such broken file, you can fix it by invoking cpulock
+     with option -r.  It fixes the record of such entries to free
+     state.
+
+  --reset-resource, -R:
+
+     completely reset the state of the resource file. All CPUs are
+     marked as free.  Cpulock -R essentially recreates the resource
+     file.  
+
+  --cpus N, -C N:
+
+     when cpulock creates the resource file for the first time, it
+     automatically infers the number of CPUs by means of sysconf
+     system call.  If you ever want to specify the number of CPUs
+     managed by cpulock, specify this parameter with -R.
+
+  --bind-self CPU_GROUP_LIST, -b CPU_GROUP_LIST:
+
+     specify the CPUs on which cpulock itself will run, so that it
+     won't disturb parallel processes running on other CPUs.
+     Cpulock does not consume much CPUs, so it should not be an issue
+     even without this option. You may nevertheless want to make sure
+     cpulock never disturbs other processes, by ensuring all cpulock
+     processes run on a particular CPU, for example.
+
+CPU_GROUP_LIST syntax:
+
+     The syntax of CPU_GROUP_LIST is borrowed from taskset, extended
+     to accommodate requesting co-allocation of a group of CPUs.
+     Co-allocating a group of CPUs is often necessary to make sure you
+     acquire both hardware threads of a single physical core.
+
+     CPU_GROUP_LIST ::= RANGE ( , RANGE )*
+     RANGE          ::= GROUP ( - GROUP ) ?
+     GROUP          ::= number ( / number )*
+     number         ::= 0|1|2|...|8|9
+
+EXAMPLES:
+
+(1)
+    cpulock -c 0,1,2,3 ./your_program
+
+requests CPUs 0, 1, 2, and 3.
+
+(2)
+    cpulock -c 0,2,4 -n 2 ./your_program
+
+requests ANY TWO of CPUs 0, 2, and 4.  You may get 0 and 2, 0, and 4,
+or 0 and 4.  The cores you got are in environment variables
+CPUS_LOCKED.
+
+(3) 
+    cpulock -c 0-23 -n 10 ./your_program
+
+requests any 10 of CPUs 0, 1, 2, ..., and 23.  
+
+(4) 
+    cpulock -c 0/24-23/47 -n 3 ./your_program
+
+requests any 3 of CPU groups {0,24}, {1,25}, {2,26}, ..., {23,47}.
+You may get, for example, 0, 3, 7, 24, 27, and 31.
+
+This GROUP syntax allows you to request a group of CPUs at the same
+time.  
+
+(5) The following is an abbreviated form of the above.
+
+     cpulock 0/24-23 -n 3 ./your_program
+
+In other words, when you specify a range of groups, you may omit
+redundant numbers.  
+
+(6) The following is invalid due to the inconsistency in specifying
+the range of groups.
+
+     cpulock 0/24-10/30 -n 3 ./your_program
+
+When you specify the range of groups (a1/../an-b1/../bn), you must have
+b1 - a1 = b2 - a2 = ... = bn - an.
+
