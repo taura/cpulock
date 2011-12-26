@@ -435,6 +435,7 @@ static void release_orphans_in_respool(respool_t res) {
 }
 
 static void show_respool(respool_t res) {
+  double ct = cur_time();
   printf(" initialized: %d\n", res->initialized);
   printf(" op_count: %d\n", res->op_count);
   printf(" n_resources: %d\n", res->n_resources);
@@ -445,11 +446,11 @@ static void show_respool(respool_t res) {
     if (p == 0) {
       printf("  [%d]: since %.3f free\n", i, res->states[i].since);
     } else if (find_process(p)) {
-      printf("  [%d]: since %.3f held by %d\n", 
-	     i, res->states[i].since, res->states[i].pid);
+      printf("  [%d]: since %.3f (for %.3f sec) held by %d \n", 
+	     i, res->states[i].since, ct - res->states[i].since, res->states[i].pid);
     } else {
-      printf("! [%d]: since %.3f held by %d (non existent)\n", 
-	     i, res->states[i].since, res->states[i].pid);
+      printf("! [%d]: since %.3f (for %.3f sec) held by %d (non existent)\n", 
+	     i, res->states[i].since, ct - res->states[i].since, res->states[i].pid);
     }
   }
   printf(" work_area:\n");
