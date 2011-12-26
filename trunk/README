@@ -5,11 +5,9 @@ see docs/usage.txt for how to use
 
 == INSTALL ==
 
-cd src
-make 
-
-will compile an executable 'cpulock.'  Run it or copy it to whereever you like.
-
+./configure
+make
+make install 
 
 == TODO ==
 - support 'mask' just as taskset does
