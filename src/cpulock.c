@@ -167,6 +167,7 @@ static request_t mk_request() {
   return req;
 }
 
+/* ensure REQ has enough size to add an intset */
 static void request_ensure_size(request_t req) {
   if (req->n_groups == req->sz_groups) {
     intset_t * groups = req->groups;
@@ -179,6 +180,7 @@ static void request_ensure_size(request_t req) {
   }
 }
 
+/* add set of int IS to request REQ */
 static void request_add_group(request_t req, intset_t is) {
   request_ensure_size(req);
   req->groups[req->n_groups] = is;
@@ -241,6 +243,7 @@ typedef struct char_stream {
   int ok_pos;			/* position successfully parsed so far */
 } char_stream, * char_stream_t;
 
+/* make a character stream returning characters in A */
 static char_stream_t mk_char_stream(char * a) {
   char_stream_t cs = my_alloc(sizeof(char_stream));
   cs->a = a;
@@ -264,20 +267,18 @@ static inline void set_ok_pos(char_stream_t s) {
   s->ok_pos = s->i;
 }
 
-static void parse_error(char_stream_t s, char * msg, int show_error) {
-  if (show_error) {
-    int i;
-    fprintf(stderr, "%s: invalid resource list: %s\n", 
-	    gv.args->progname, msg);
-    fprintf(stderr, "  %s", s->a);
-    for (i = 0; i < 2 + s->ok_pos; i++) fputc(' ', stderr);
-    for (     ; i < 2 + s->i; i++) fputc('^', stderr);
-    fputc('\n', stderr);
-  }
+static void parse_error(char_stream_t s, char * msg) {
+  int i;
+  fprintf(stderr, "%s: invalid resource list: %s\n", 
+	  gv.args->progname, msg);
+  fprintf(stderr, "  %s", s->a);
+  for (i = 0; i < 2 + s->ok_pos; i++) fputc(' ', stderr);
+  for (     ; i < 2 + s->i; i++) fputc('^', stderr);
+  fputc('\n', stderr);
 }
 
 /* get a non-negative number or return -1 */
-static int parse_int(char_stream_t s, int show_error) {
+static int parse_int(char_stream_t s) {
   int x = 0;
   int n_digits = 0;
   while (isdigit(cur_char(s))) {
@@ -286,17 +287,17 @@ static int parse_int(char_stream_t s, int show_error) {
     next_char(s);
   }
   if (n_digits == 0) { 
-    parse_error(s, "expected a digit", show_error); 
+    parse_error(s, "expected a digit"); 
     return -1; 
   }
   return x;
 }
 
 /* get an num/num/../num and return intset_t or NULL */
-static intset_t parse_group(char_stream_t s, int show_error) {
+static intset_t parse_group(char_stream_t s) {
   intset_t group = mk_intset();
   while (1) {
-    int x = parse_int(s, show_error);
+    int x = parse_int(s);
     if (x == -1) return NULL;
     intset_add(group, x);
     if (cur_char(s) == '/') next_char(s);
@@ -308,13 +309,13 @@ static intset_t parse_group(char_stream_t s, int show_error) {
 /* get a single group (e.g., 0/6/12/24) or group-group
    e.g., (0/6/12/24-5/11/17/29).
    put the parsed range into req */
-static int parse_range(char_stream_t s, request_t req, int show_error) {
-  intset_t g = parse_group(s, show_error);
+static int parse_range(char_stream_t s, request_t req) {
+  intset_t g = parse_group(s);
   if (g == NULL) return -1;	/* NG */
   intset_t h = NULL;
   if (cur_char(s) == '-') {
     next_char(s);
-    h = parse_group(s, show_error);
+    h = parse_group(s);
   } 
   /* now we have group - group. make sense of it and
      translate it into a list of groups */
@@ -332,12 +333,12 @@ static int parse_range(char_stream_t s, request_t req, int show_error) {
       int i;
       for (i = 0; i < g->n; i++) {
 	if (h->a[i] - g->a[i] + 1 != range_length) {
-	  parse_error(s, "invalid resource groups", show_error); 
+	  parse_error(s, "invalid resource groups"); 
 	  return -1; /* NG */
 	}
       }
     } else if (h->n != 1) {
-      parse_error(s, "invalid resource group", show_error); 
+      parse_error(s, "invalid resource group"); 
       return -1; /* NG */
     }
   } else {
@@ -358,18 +359,18 @@ static int parse_range(char_stream_t s, request_t req, int show_error) {
 /* parse the entire resource list, like:
    0,3-5,6/30-9,12/36-18,42 
    kind of string */
-static request_t parse_resource_list(char * arg, request_t req, int show_error) {
+static request_t parse_resource_list(char * arg, request_t req) {
   char_stream_t s = mk_char_stream(arg);
-  if (parse_range(s, req, show_error) == -1) return NULL;
+  if (parse_range(s, req) == -1) return NULL;
   set_ok_pos(s);
   while (cur_char(s) == ',') {
     next_char(s);
-    if (parse_range(s, req, show_error) == -1) return NULL;
+    if (parse_range(s, req) == -1) return NULL;
     set_ok_pos(s);
   }
   if (cur_char(s) != '\0') { 
     next_char(s);
-    parse_error(s, "junk at the end of resource list", show_error); 
+    parse_error(s, "junk at the end of resource list"); 
     return NULL; 
   }
   return req;
@@ -631,6 +632,14 @@ static int try_acquire_resources(request_t req, respool_t res, reply_t rep) {
   if (gv.args->verbosity >= 2) {
     fprintf(stderr, "%s: try_acquire_resources\n", gv.args->progname);
   }
+  if (req->n_required > req->n_groups) {
+    fprintf(stderr, 
+	    "%s: warning: required resources (%d) truncated to the "
+	    "specified groups (%d)\n", 
+	    gv.args->progname, req->n_required, req->n_groups);
+    req->n_required = req->n_groups;
+  }
+
   for (i = 0; i < res->n_resources; i++) {
     rep->acquired[i] = 0;
   }
@@ -948,14 +957,14 @@ static cmdline_args_t parse_cmdline(int argc, char ** argv) {
     case 'b':
       {
 	if (req_self == NULL) req_self = mk_request();
-	if (parse_resource_list(optarg, req_self, 1) == NULL) 
+	if (parse_resource_list(optarg, req_self) == NULL) 
 	  return NULL; /* NG */
 	break;
       }
     case 'c':
       {
 	if (req == NULL) req = mk_request();
-	if (parse_resource_list(optarg, req, 1) == NULL) return NULL; /* NG */
+	if (parse_resource_list(optarg, req) == NULL) return NULL; /* NG */
 	break;
       }
     case 'f':
@@ -1005,7 +1014,7 @@ static cmdline_args_t parse_cmdline(int argc, char ** argv) {
       /* no -c given, the first arg must be it */
       if (optind < argc) {
 	req = mk_request();
-	if (parse_resource_list(argv[optind], req, 1) == NULL)
+	if (parse_resource_list(argv[optind], req) == NULL)
 	  return NULL; /* NG */
 	optind++;
       } else {
