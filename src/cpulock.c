@@ -434,8 +434,13 @@ static void release_orphans_in_respool(respool_t res) {
   }
 }
 
-static void show_respool(respool_t res) {
+static void show_respool(respool_t res, char * filename) {
   double ct = cur_time();
+  if (filename) {
+    printf("filename: %s\n", filename);
+  } else {
+    printf("filename: (memory)\n");
+  }
   printf(" initialized: %d\n", res->initialized);
   printf(" op_count: %d\n", res->op_count);
   printf(" n_resources: %d\n", res->n_resources);
@@ -453,9 +458,11 @@ static void show_respool(respool_t res) {
 	     i, res->states[i].since, ct - res->states[i].since, res->states[i].pid);
     }
   }
-  printf(" work_area:\n");
-  for (i = 0; i < res->n_resources; i++) {
-    printf("  [%d]: %d\n", i, res->work_area[i]);
+  if (0) {
+    printf(" work_area:\n");
+    for (i = 0; i < res->n_resources; i++) {
+      printf("  [%d]: %d\n", i, res->work_area[i]);
+    }
   }
 }
 
@@ -737,7 +744,7 @@ int show_res_file(char * filename) {
   }
   respool_t res = map_respool_file(filename);
   if (res == NULL) return 0;	/* NG */
-  show_respool(res);
+  show_respool(res, filename);
   return 1;
 }
 
@@ -835,7 +842,7 @@ static void * thread_fun(void * arg_) {
   }
   if (gv.args->verbosity >= 2) {
     fprintf(stderr, "%s: done\n", gv.args->progname);
-    show_respool(res);
+    show_respool(res, res_file);
   }
   for (i = 0; i < MAX_RESOURCES; i++) {
     printf("%d %d\n", i, requested[i]);
@@ -894,7 +901,7 @@ int test_main(int argc, char ** argv) {
   if (res_file) {
     res = mk_respool(res_file, n_resources);
   } 
-  show_respool(res);
+  show_respool(res, res_file);
   return 0;
 }
 
