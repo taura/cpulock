@@ -26,7 +26,7 @@ double cur_time() {
 typedef struct quantum_record {
   double a;			/* from */
   double b;			/* to */
-  int core;			/* on */
+  int cpu;			/* on */
 } quantum_record, * quantum_record_t;
 
 #define MAX_RECORDS 10000
@@ -43,14 +43,14 @@ void bind_to_core(int core) {
 typedef struct thread_arg {
   int id;
   int tid;
-  int core;
+  int cpu;
   double dt;
   pthread_t pthread_id;
 } * thread_arg_t;
 
 void * thread_main(void * arg_) {
   thread_arg_t arg = arg_;
-  int core = arg->core;
+  int core = arg->cpu;
   if (core != -1) {
     bind_to_core(core);
   }
@@ -77,7 +77,7 @@ void * thread_main(void * arg_) {
 	 somebody else running on this core? */
       qr[n_quantums].a = quantum_began;
       qr[n_quantums].b = last_t;
-      qr[n_quantums].core = quantum_core;
+      qr[n_quantums].cpu = quantum_core;
       n_quantums++;
       /* new quantum just began */
       quantum_began = t;
@@ -89,26 +89,26 @@ void * thread_main(void * arg_) {
   if (n_quantums < MAX_RECORDS) {
     qr[n_quantums].a = quantum_began;
     qr[n_quantums].b = last_t;
-    qr[n_quantums].core = quantum_core;
+    qr[n_quantums].cpu = quantum_core;
     n_quantums++;
   }
 
   int i;
   for (i = 0; i < n_quantums; i++) {
-    printf("run_%d_%d,%f,%f,%d,id=%d;tid=%d\n", 
-	   id, tid, qr[i].a, qr[i].b, qr[i].core, id, tid);
+    printf("run_%d,%f,%f,%d,id=%d;tid=%d\n", 
+	   id, qr[i].a, qr[i].b, qr[i].cpu, id, tid);
   }
   return 0;
 }
   
-int * parse_cores() {
-  char * cores_locked = getenv("CORES_LOCKED");
-  if (cores_locked == NULL) { 
-    fprintf(stderr, "environment variable CORES_LOCKED not set\n"); 
+int * parse_cpus() {
+  char * cpus_locked = getenv("CPUS_LOCKED");
+  if (cpus_locked == NULL) { 
+    fprintf(stderr, "environment variable CPUS_LOCKED not set\n"); 
     exit(1); 
   }
   int n = 0;
-  char * p = cores_locked;
+  char * p = cpus_locked;
   while (p) {
     n++;
     p = strchr(p, ',');
@@ -117,7 +117,7 @@ int * parse_cores() {
   int * a = malloc(sizeof(int) * (n + 1));
   if (a == NULL) { perror("malloc"); exit(1); }
   int i;
-  p = cores_locked;
+  p = cpus_locked;
   for (i = 0; i < n; i++) {
     char * q = strchr(p, ',');
     if (i < n - 1) {
@@ -138,13 +138,13 @@ int main(int argc, char ** argv) {
   int n_threads = atoi(argv[2]);
   double dt = atof(argv[3]);
   thread_arg_t args = malloc(sizeof(struct thread_arg) * n_threads);
-  int * cores = parse_cores();
+  int * cpus = parse_cpus();
   int i;
   for (i = 0; i < n_threads; i++) {
     args[i].id = id;
     args[i].tid = i;
     args[i].dt = dt;
-    args[i].core = cores[i];
+    args[i].cpu = cpus[i];
     pthread_create(&args[i].pthread_id, NULL, thread_main, &args[i]);
   }
   for (i = 0; i < n_threads; i++) {

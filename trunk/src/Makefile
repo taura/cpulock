@@ -1,12 +1,14 @@
 CC:=gcc
-CFLAGS:=-Wall -g -lpthread
+CFLAGS:=-Wall -O3 -lpthread
 all : cpulock
 
-cpulock : cpulock.o usage.h 
+cpulock : cpulock.o
 	$(CC) $(CFLAGS) -o cpulock cpulock.c
 
-usage.h : usage.txt
-	sed 's/"/\\"/g' usage.txt > a.h
+cpulock.o : usage.h
+
+usage.h : ../docs/usage.txt
+	sed 's/"/\\"/g' ../docs/usage.txt > a.h
 	awk  '{ print "\"" $$0 "\\n\"" }' a.h > b.h
 	mv b.h usage.h
 	rm a.h
