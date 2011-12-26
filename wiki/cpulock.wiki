@@ -13,10 +13,10 @@ see docs/usage.txt for how to use
 
 = INSTALL =
 
-./configure
-make
-make install
+ ./configure
+ make
+ make install
 
 = TODO =
-* support 'mask' just as taskset does
-* suppport stride just as taskset does
+ * support 'mask' just as taskset does
+ * suppport stride just as taskset does
