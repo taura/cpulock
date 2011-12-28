@@ -567,6 +567,7 @@ static respool_t create_or_map_respool_file(char * filename, int mode, int n_res
   }
   /* I took the responsibility of creating the file */
   struct stat sbuf;
+  if (fchmod(fd, mode) == -1) die("fchmod");
   if (fstat(fd, &sbuf) == -1) die("fstat");
   if (gv.args->verbosity >= 2) {
     fprintf(stderr, 
