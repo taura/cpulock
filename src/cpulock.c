@@ -976,6 +976,7 @@ static cmdline_args_t parse_cmdline(int argc, char ** argv) {
       }
       break;
     case 'n':
+      if (req == NULL) req = mk_request();
       req->n_required = strtol(optarg, &invalid_char, 10);
       if (invalid_char == optarg) {
 	fprintf(stderr, "invalid arg to -n");
