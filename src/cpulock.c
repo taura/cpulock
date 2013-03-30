@@ -23,7 +23,7 @@
 
 #define CREATE_THREAD 0
 
-#define MAX_RESOURCES 128
+#define MAX_RESOURCES 2048
 
 /* res group is an array of integers */
 typedef struct intset {
