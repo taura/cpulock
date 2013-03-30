@@ -216,6 +216,8 @@ static reply_t mk_reply() {
         request any two from { 4, 5, 6, 7 }.
   (2) -c 0-3,7-9 -r 5
         request any five from { 0, 1, 2, 3, 7, 8, 9 }
+  (3) -c 0-15:4 -r 3  # stride by 4
+        request any three from { 0, 4, 8, 12 }
   (3) -c 0/24-23/47 -r 3
       0/24 means 0 and 24 are combined;
       they are obtained together only when both are free.
@@ -227,11 +229,13 @@ static reply_t mk_reply() {
       for example, you may end up with obtaining 
       0, 2, 8, 24, 26, and 32, or
       3, 7, 10, 27, 31, and 34.
+  (4) -c 0/24-23/47:4 -r 3
+      any three pairs from { 0/24, 4/28, 8/32, ..., 20/44 }
 
 this is the syntax for the string that comes after -c
  
    request := range  ( ',' range )*
-   range   := group  ( '-' group )?
+   range   := group  ( '-' group ( ':' num )? )?
    group   := num    ( '/' num   )* 
  */
 
@@ -271,7 +275,7 @@ static void parse_error(char_stream_t s, char * msg) {
   int i;
   fprintf(stderr, "%s: invalid resource list: %s\n", 
 	  gv.args->progname, msg);
-  fprintf(stderr, "  %s", s->a);
+  fprintf(stderr, "  %s\n", s->a);
   for (i = 0; i < 2 + s->ok_pos; i++) fputc(' ', stderr);
   for (     ; i < 2 + s->i; i++) fputc('^', stderr);
   fputc('\n', stderr);
@@ -313,9 +317,15 @@ static int parse_range(char_stream_t s, request_t req) {
   intset_t g = parse_group(s);
   if (g == NULL) return -1;	/* NG */
   intset_t h = NULL;
+  int stride = 1;			/* stride */
   if (cur_char(s) == '-') {
     next_char(s);
     h = parse_group(s);
+    if (cur_char(s) == ':') {
+      next_char(s);
+      stride = parse_int(s);
+      if (stride == -1) return -1; /* NG */
+    }
   } 
   /* now we have group - group. make sense of it and
      translate it into a list of groups */
@@ -348,7 +358,7 @@ static int parse_range(char_stream_t s, request_t req) {
     /* now it has been succefully parsed
        add groups, 0/24, 1/25, 2/26, ... */
     int i;
-    for (i = 0; i < range_length; i++) {
+    for (i = 0; i < range_length; i += stride) {
       intset_t g_ = mk_shifted_set(g, i);
       request_add_group(req, g_);
     }
