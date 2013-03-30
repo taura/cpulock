@@ -158,7 +158,12 @@ CPUS_LOCKED.
 
 requests any 10 of CPUs 0, 1, 2, ..., and 23.  
 
-(4) 
+(4)
+    cpulock -c 0-23:4 -n 3 ./your_program
+
+requests any 3 of CPUs 0, 4, 8, ..., and 20.
+
+(5) 
     cpulock -c 0/24-23/47 -n 3 ./your_program
 
 requests any 3 of CPU groups {0,24}, {1,25}, {2,26}, ..., {23,47}.
@@ -167,18 +172,24 @@ You may get, for example, 0, 3, 7, 24, 27, and 31.
 This GROUP syntax allows you to request a group of CPUs at the same
 time.  
 
-(5) The following is an abbreviated form of the above.
+(6) The following is an abbreviated form of the above.
 
      cpulock 0/24-23 -n 3 ./your_program
 
 In other words, when you specify a range of groups, you may omit
 redundant numbers.  
 
-(6) The following is invalid due to the inconsistency in specifying
+(7) The following is invalid due to the inconsistency in specifying
 the range of groups.
 
      cpulock 0/24-10/30 -n 3 ./your_program
 
 When you specify the range of groups (a1/../an-b1/../bn), you must have
 b1 - a1 = b2 - a2 = ... = bn - an.
+
+(8) The group syntax also supports stride.
+
+     cpulock 0/24-10/34:2 -n 3 ./your_program
+
+requests any 3 of CPU groups {0,24}, {2,26}, {4,28}, ..., {10,34}.
 
